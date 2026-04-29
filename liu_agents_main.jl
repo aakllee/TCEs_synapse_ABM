@@ -27,7 +27,7 @@ using Unzip
 
 include("liu_agents_liu_functions.jl")
 
-@kwdef mutable struct Parameters{T<:Real, DistT<:Distribution}
+@kwdef mutable struct Parameters{T<:Real, DistTCR<:Distribution, DistTAA<:Distribution}
     n_effector_0::T  = 1e6 # Initial effector cells, 1/mL.
     n_target_0::T    = 1e6 # Initial target cells, 1/mL.
     
@@ -39,8 +39,8 @@ include("liu_agents_liu_functions.jl")
     TCE_conc::T    = 1.0     # [TCE], flag_nM ? nM : ng/mL.
     flag_nM::Bool  = false
     MW::T          = 54_100  # TCE molecular weight, g/mol. 
-    TCR_dist::DistT = Dirac{T}(66_299)  # TCR antigen distribution, 1/cell.
-    TAA_dist::DistT = Dirac{T}(144_866) # TAA antigen distribution, 1/cell.
+    TCR_dist::DistTCR # = Dirac{T}(66_299)  # TCR antigen distribution, 1/cell.
+    TAA_dist::DistTAA # = Dirac{T}(144_866) # TAA antigen distribution, 1/cell.
     tau_synapse::T = 150     # Synapse duration (in vitro model), mins.
     KD_TCR::T      = 2.6e-7  # TCR binding affinity, M. 
     KD_TAA::T      = 1.49e-9 # TAA binding affinity, M.
@@ -86,7 +86,7 @@ end
 
 # Free effector.
 @agent struct Effector(NoSpaceAgent)
-    TCR_0::Int64        # Assigned TCR antigen number on cell (e.g. CD3), molecules per cell.
+    TCR_0::Float64      # Assigned TCR antigen number on cell (e.g. CD3), molecules per cell.
     TCR_free::Float64   # Free TCR on cell surface, /um^2.
     TCR_binary::Float64 # TCR in binary complex on cell surface, /um^2.
     
@@ -96,7 +96,7 @@ end
 
 # Free target.
 @agent struct Target(NoSpaceAgent)
-    TAA_0::Int64        # TAA antigen number on cell (e.g. CD19), molecules per cell.
+    TAA_0::Float64      # TAA antigen number on cell (e.g. CD19), molecules per cell.
     TAA_free::Float64   # Free TAA on cell surface, /um^2.
     TAA_binary::Float64 # TAA in binary complex on cell surface, /um^2. 
 end
@@ -238,7 +238,7 @@ ngmL_to_M(conc, MW) = conc * 1000 * 1e-9 / MW
 removes the targets and effectors from the simulation until the
 synapse is dissolved."
 function form_conjugate!(effector, target, model)
-    add_agent!(Cells∘Conjugate, model; time_formed = abmtime(model),
+    add_agent!(Cells ∘ Conjugate, model; time_formed = abmtime(model),
                effectors = Effector[variant(effector)],
                targets   = Target[variant(target)])
     remove_agent!(effector, model)
@@ -435,29 +435,25 @@ function initialise_model(;
                           fETEE = 0.5,  fTETT = 0.33, fTETE = 0.67,
                           kint = 0.002, beta = 0.033,
                           Sc1 = 5.0,)
-    @assert(typeof(TCR_dist) == typeof(TAA_dist) && TCR_dist isa Real && TAA_dist isa Real,
-            "TODO: distributions for TCR and TAA")
+    if TCR_dist isa Real
+        TCR_dist = Dirac{Float64}(TCR_dist)
+    end
+    if TAA_dist isa Real
+        TAA_dist = Dirac{Float64}(TAA_dist)
+    end
     
-    properties = Parameters{Float64, Dirac}(
-        # Simulation parameters
-        ; Na, dt,
-        # Model parameters
-        TCE_conc, flag_nM, MW,
+    properties = Parameters{Float64, typeof(TCR_dist), typeof(TAA_dist)}(
+        ; Na, dt, TCE_conc, flag_nM, MW,
         n_effector_0, n_target_0,
-        TCR_dist = Dirac{Float64}(TCR_dist),
-        TAA_dist = Dirac{Float64}(TAA_dist),
+        TCR_dist = TCR_dist, TAA_dist = TAA_dist,
         KD_TCR, KD_TAA,
-        S_effector, S_target,
-        tau_synapse,
+        S_effector, S_target, tau_synapse,
         D, R_system, R_target, R_effector,
         fETE, fTET, fETET, fETEE, fTETT, fTETE,
         kint, beta, Sc1, 
         calculate_rate_constants(KD_TCR, KD_TAA; Na)..., # Set calculated rate constants
-        
-        # Variables
         n_effector_free = n_effector_0, # Set initial effector cell population
         n_target_free   = n_target_0,   # Set initial target cell population
-        # n_conjugate = zeros(Int64,3,3),
     )
 
     # Create model
@@ -521,7 +517,8 @@ function run_liu_ABM!(; t_end = 60, showprogress = true, kwargs...)
     return model, agent_df, model_df, fig
 end
 
-function reproduce_liu_fig3()
+function reproduce_liu_fig3(; CD3_mean = 66_299, CD19_mean = 144_866,
+                            CD3_geomean = 60_053, CD19_geomean = 130_670)
     liufig3b_data = [0.6487015067924768  1.2831858407079646; 4.887775298393741   2.256637168141593; 19.434038570303596  4.601769911504424; 49.42251490751028   11.283185840707967; 98.54287131604329   12.52212389380531; 196.6991032270088   12.52212389380531; 392.8574323347438   11.858407079646017; 997.1542887677606   0.7079646017699125; 1990.1620644143597  0.8407079646017688]
 
     mdata = [
@@ -533,14 +530,17 @@ function reproduce_liu_fig3()
 
     TCE_concs = liufig3b_data[:,1]
     t_end = 60 # Minutes
-
+    
+    TCR_dist = LogNormal(log(CD3_geomean),  sqrt(2 * (log(CD3_mean)  - log(CD3_geomean))))
+    TAA_dist = LogNormal(log(CD19_geomean), sqrt(2 * (log(CD19_mean) - log(CD19_geomean))))
+    
     println("Running model...")
     progress_meter = Progress(length(TCE_concs))
     results = ThreadsX.map(
         # For each concentration
         TCE_conc -> begin
             # Run model for 1 hour
-            model = initialise_model(; TCE_conc)
+            model = initialise_model(; TCE_conc, TCR_dist, TAA_dist)
             time = 0:model.dt:t_end
             nsteps = Int(t_end / model.dt)
             agent_df, model_df = run!(model, nsteps; mdata, showprogress = false);
