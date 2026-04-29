@@ -10,7 +10,7 @@
 
 # This one is attempting to replicate the model with Agents.jl.
 # Much more performant, readable, and robust.
-# Simulation of 1 hour at 2x10^6 cells takes about 10 seconds.
+# Simulation of 9x 1 hour at 2x10^6 cells takes about 60 seconds.
 # Further optimisation may be achieved by using the analytical
 # solution for the binding equations.
 
