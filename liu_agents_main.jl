@@ -52,7 +52,7 @@ include("liu_agents_liu_functions.jl")
     beta::T        = 0.033 # Binding constant, unitless.
     Sc1::T         = 5.0   # Synapse surface contact area, um^2.
 
-    target_growth_rate::T = 0.02 # Maximum free target growth rate, (cells/mL)/minute.
+    target_growth_rate::T = 0.02 # Maximum free target growth rate, 1/minute.
     n_target_max::T       = 1e8  # Maximum total target population, cells/mL. 
     
     # Spatial constants
