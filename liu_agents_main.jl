@@ -30,7 +30,7 @@ include("liu_agents_liu_functions.jl")
     
     enable_TCR_downregulation::Bool        = true
     enable_TAA_internalisation::Bool       = true
-    enable_equilibrium_recalibration::Bool = false
+    enable_equilibrium_recalibration::Bool = true
     enable_target_growth::Bool             = false
 
     # Model parameters
@@ -589,21 +589,21 @@ function reproduce_liu_fig3()
     println("Done.")
     println("Plotting...")
 
-    pIS_values_E = [model_df[end, :effector_percent_engaged] for (_, model_df) in results]
-    pIS_values_T = [model_df[end, :target_percent_engaged] for (_, model_df) in results]
+    percent_effectors_engaged_series = [model_df[end, :effector_percent_engaged] for (_, model_df) in results]
+    percent_targets_engaged_series   = [model_df[end, :target_percent_engaged] for (_, model_df) in results]
     
     default(fontfamily = "Computer Modern", linewidth = 2, framestyle = :box, grid = false)
     fig = plot(xlabel = "[Blinatumomab] (ng/ml)", ylabel = "% engaged",
                xscale = :log10, legend = :topleft)
 
-    plot!(fig, TCE_concs, pIS_values_E, label = "Sim. effector", c = 1)
-    plot!(fig, TCE_concs, pIS_values_T, label = "Sim. target", c = 2)
-    scatter!(fig, liufig3b_data[:,1], liufig3b_data[:,2], label = "Obs. effector", c = 1)
+    plot!(fig, TCE_concs, percent_effectors_engaged_series, label = "Sim. Effector", c = 1)
+    plot!(fig, TCE_concs, percent_targets_engaged_series,   label = "Sim. Target", c = 2)
+    scatter!(fig, liufig3b_data[:,1], liufig3b_data[:,2], label = "Obs. Effector", c = 1)
 
     display(fig)
 
     println("Done.")
-    return results, pIS_values, fig
+    return results, percent_effectors_engaged_series, percent_targets_engaged_series, fig
 end
 
 
