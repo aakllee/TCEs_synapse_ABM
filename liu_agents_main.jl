@@ -593,11 +593,12 @@ function reproduce_liu_fig3()
     pIS_values_T = [model_df[end, :target_percent_engaged] for (_, model_df) in results]
     
     default(fontfamily = "Computer Modern", linewidth = 2, framestyle = :box, grid = false)
-    fig = plot(xlabel = "[Blinatumomab] (ng/ml)", ylabel = "Effector % engaged",
+    fig = plot(xlabel = "[Blinatumomab] (ng/ml)", ylabel = "% engaged",
                xscale = :log10, legend = :topleft)
 
-    plot!(fig, TCE_concs, pIS_values, label = "Sim.", c = 1)
-    scatter!(fig, liufig3b_data[:,1], liufig3b_data[:,2], label = "Obs.", c = 1)
+    plot!(fig, TCE_concs, pIS_values_E, label = "Sim. effector", c = 1)
+    plot!(fig, TCE_concs, pIS_values_T, label = "Sim. target", c = 2)
+    scatter!(fig, liufig3b_data[:,1], liufig3b_data[:,2], label = "Obs. effector", c = 1)
 
     display(fig)
 
