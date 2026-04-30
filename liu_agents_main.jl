@@ -8,12 +8,6 @@
 # engagers predict clinical pharmacodynamics and treatment resistance
 # eLife 12:e83659
 
-# This one is attempting to replicate the model with Agents.jl.
-# Much more performant, readable, and robust.
-# Simulation of 9x 1 hour at 2x10^6 cells takes about 60 seconds.
-# Further optimisation may be achieved by using the analytical
-# solution for the binding equations.
-
 using Agents
 using DifferentialEquations
 using Distributions
@@ -23,7 +17,6 @@ using Plots
 using ProgressMeter
 using Statistics
 using ThreadsX
-using Unzip
 
 include("liu_agents_liu_functions.jl")
 
@@ -34,14 +27,19 @@ include("liu_agents_liu_functions.jl")
     # Simulation parameters
     Na::T = PhysicalConstants.CODATA2022.N_A.val # Avogradro constant, 1/mol
     dt::Int64 = 1 # Timestep, mins.
+    
+    enable_TCR_downregulation::Bool        = true
+    enable_TAA_internalisation::Bool       = true
+    enable_equilibrium_recalibration::Bool = false
+    enable_target_growth::Bool             = false
 
     # Model parameters
     TCE_conc::T    = 1.0     # [TCE], flag_nM ? nM : ng/mL.
     flag_nM::Bool  = false
-    MW::T          = 54_100  # TCE molecular weight, g/mol. 
-    TCR_dist::DistTCR # = Dirac{T}(66_299)  # TCR antigen distribution, 1/cell.
-    TAA_dist::DistTAA # = Dirac{T}(144_866) # TAA antigen distribution, 1/cell.
-    tau_synapse::T = 150     # Synapse duration (in vitro model), mins.
+    MW::T          = 55_000  # TCE molecular weight, g/mol. 
+    TCR_dist::DistTCR # = Dirac{T}(66_299)  # TCR antigen distribution, molecules/cell.
+    TAA_dist::DistTAA # = Dirac{T}(144_866) # TAA antigen distribution, molecules/cell.
+    tau_synapse::T = 150     # Synapse duration (in vitro model), minutes.
     KD_TCR::T      = 2.6e-7  # TCR binding affinity, M. 
     KD_TAA::T      = 1.49e-9 # TAA binding affinity, M.
     S_effector::T  = 4*pi * (5.0^2) * 1.8 # Effector surface area, um^2.
@@ -52,7 +50,10 @@ include("liu_agents_liu_functions.jl")
     R_effector::T  = 5.0   # Radius of effector cell, um.
     kint::T        = 0.002 # Internalisation rate of TAA, unitless.
     beta::T        = 0.033 # Binding constant, unitless.
-    Sc1::T         = 5.0   # Synapse surface contact area, um^2. 
+    Sc1::T         = 5.0   # Synapse surface contact area, um^2.
+
+    target_growth_rate::T = 0.02 # Maximum free target growth rate, (cells/mL)/minute.
+    n_target_max::T       = 1e8  # Maximum total target population, cells/mL. 
     
     # Spatial constants
     fETE::T        = 0.75
@@ -65,22 +66,22 @@ include("liu_agents_liu_functions.jl")
     # Variables
     n_effector_free::Int64     = 1e6 # Free effector cell population, cells/mL.
     n_target_free::Int64       = 1e6 # Free target cell population, cells/mL.
-    n_conjugate::Matrix{Int64} = zeros(Int64, 3, 3) # Conjugate population, cells/mL.
+    n_conjugate::Matrix{Int64} = zeros(Int64, 3, 3) # Conjugate population (matrix of [n_E, n_T]), cells/mL.
     equilibrium_TCR_free::T    = 0.0 # Free TCR at equilibrium, 1/um^2.
     equilibrium_TCR_binary::T  = 0.0 # TCR binary complex at equilibrium, 1/um^2.
     equilibrium_TAA_free::T    = 0.0 # Free TAA at equilibrium, 1/um^2.
     equilibrium_TAA_binary::T  = 0.0 # TAA binary complex at equilibrium, 1/um^2.
-    konA::T  = NaN # To be calculated by calculate_rate_constants
-    konB::T  = NaN # To be calculated by calculate_rate_constants
-    koffA::T = NaN # To be calculated by calculate_rate_constants
-    koffB::T = NaN # To be calculated by calculate_rate_constants
-    encounter_probability_ET::T   = 0.0
-    encounter_probability_TET::T  = 0.0
-    encounter_probability_ETET::T = 0.0
-    encounter_probability_TETT::T = 0.0
-    encounter_probability_ETE::T  = 0.0
-    encounter_probability_ETEE::T = 0.0
-    encounter_probability_TETE::T = 0.0
+    konA::T  # = NaN # To be calculated by calculate_rate_constants
+    konB::T  # = NaN # To be calculated by calculate_rate_constants
+    koffA::T # = NaN # To be calculated by calculate_rate_constants
+    koffB::T # = NaN # To be calculated by calculate_rate_constants
+    encounter_probability_ET::T   = 0.0 # Set by calculate_encounter_probabilities!(model)
+    encounter_probability_TET::T  = 0.0 # Set by calculate_encounter_probabilities!(model)
+    encounter_probability_ETET::T = 0.0 # Set by calculate_encounter_probabilities!(model)
+    encounter_probability_TETT::T = 0.0 # Set by calculate_encounter_probabilities!(model)
+    encounter_probability_ETE::T  = 0.0 # Set by calculate_encounter_probabilities!(model)
+    encounter_probability_ETEE::T = 0.0 # Set by calculate_encounter_probabilities!(model)
+    encounter_probability_TETE::T = 0.0 # Set by calculate_encounter_probabilities!(model)
     cache::ODECache{T} = create_ode_cache((; konA, konB, koffA, koffB), T)
 end
 
@@ -119,8 +120,6 @@ get_cells(cell_type, model) = [cells for cells in allagents(model) if variantof(
 
 "Counts number of cells of type cell_type in model."
 function count(cell_type, model)
-    # @warn "Generic count(cell_type, model) is slow. Use count_free_effectors, count_free_targets, count_conjugates instead."
-    # return count(cell -> variantof(cell) == cell_type, allagents(model))
     if cell_type == Effector
         return count_free_effectors(model)
     elseif cell_type == Target
@@ -216,6 +215,9 @@ function TCR_equilibriate!(effector, model)
     (; ag_free, ag_binary) = ag_equilibrium(effector.TCR_0, model.TCR_dist, model.equilibrium_TCR_free, model.equilibrium_TCR_binary)
     effector.TCR_free   = ag_free
     effector.TCR_binary = ag_binary
+    # Set assigned values
+    effector.TCR_free_0   = ag_free
+    effector.TCR_binary_0 = ag_binary
     return nothing
 end
 function TAA_equilibriate!(target, model)
@@ -324,6 +326,21 @@ function check_encounter(effector, model, ::Effector)
     return get_random_target(model) # Return a random free target.
 end
 
+# Cell division. Replicates cell. 
+function replicate_target!(target, model)
+    replicate!(target, model) # Copy target. 
+    model.n_target_free += 1  # Update population size.
+end
+# Uses logistic growth to check if a target should replicate. 
+function check_target_should_replicate(target, model)
+    !model.enable_target_growth && return false
+    n_target_all = count_all_targets(model)
+    n_target_all >= model.n_target_max && return false
+    max_replication_probability = 1 - exp(- model.target_growth_rate * model.dt)
+    replication_probability = max_replication_probability * (1 - n_target_all / model.n_target_max)
+    return rand(abmrng(model)) < replication_probability
+end
+
 ###################################
 
 "Agent step function. Branches to appropriate step function for cell
@@ -332,8 +349,8 @@ agent_step!(agent, model) = agent_step!(agent, model, variant(agent))
 
 "Effector step function. Runs for each effector on each timestep."
 function agent_step!(effector, model, ::Effector)
-    # TCR_equilibriate!(effector, model)
-    TCR_downregulation!(effector, model)
+    TCR_equilibriate!(effector, model)
+    model.enable_TCR_downregulation && TCR_downregulation!(effector, model)
 
     # Encounter target. 
     target_encountered = check_encounter(effector, model)
@@ -352,8 +369,20 @@ end
 
 "Target step function. Runs for each target on each timestep."
 function agent_step!(target, model, ::Target)
+    # TAA equilibrium and internalisation. 
     # TAA_equilibriate!(target, model)
-    TAA_internalisation!(target, model)
+    if model.enable_TAA_internalisation
+        # Because internalisation depends on the previous TAA_binary value,
+        # we cannot both equilibriate and internalise on the same timestep. 
+        TAA_internalisation!(target, model)
+    elseif model.enable_equilibrium_recalibration
+        TAA_equilibriate!(target, model)
+    end
+    # Cell division.
+    if check_target_should_replicate(target, model)
+        replicate_target!(target, model)
+    end
+    return nothing
 end
 
 "Conjugate step function. Runs for each conjugate on each timestep."
@@ -362,12 +391,12 @@ function agent_step!(conjugate, model, ::Conjugate)
     
     # Renew antigen densities for child effectors and targets
     @inbounds for effector in conjugate.effectors
-        # TCR_equilibriate!(effector, model)
-        TCR_downregulation!(effector, model)
+        TCR_equilibriate!(effector, model)
+        model.enable_TCR_downregulation && TCR_downregulation!(effector, model)
     end
     @inbounds for target in conjugate.targets
-        # TAA_equilibriate!(target, model)
-        TAA_internalisation!(target, model)
+        TAA_equilibriate!(target, model)
+        model.enable_TAA_internalisation && TAA_internalisation!(target, model)
     end
 
     # If tau_synapse has elapsed, kill target(s) and return
@@ -395,17 +424,23 @@ function agent_step!(conjugate, model, ::Conjugate)
             effector = rand(abmrng(model), conjugate.effectors)
             calculate_binding_probability!(effector, cell_to_bind, model)
         end
-        
-        x_binding = rand(abmrng(model)) # Binding?
-        x_binding > binding_probability && return nothing # Quit if no binding.
-        bind_conjugate!(variant(cell_to_bind), conjugate, model) # Bind to conjugate
+
+        # Bind to conjugate.
+        if rand(abmrng(model)) < binding_probability
+            bind_conjugate!(variant(cell_to_bind), conjugate, model)
+        end
     end
     
     return nothing
 end
 
 function model_step!(model)
-    # Calculate encounter probabilities
+    # Recalibrate equilibrium.
+    if model.enable_equilibrium_recalibration
+        calculate_equilibrium!(model)
+    end
+    
+    # Re-calculate encounter probabilities.
     calculate_encounter_probabilities!(model)
 end
 
@@ -419,9 +454,15 @@ function initialise_model(;
                           # Model parameters
                           TCE_conc      = 1.0,     # [TCE], flag_nM ? nM : ng/mL.
                           flag_nM       = false,
-                          MW            = 54_100,  # TCE molecular weight, g/mol. 
-                          TCR_dist      = 66_299,  # TCR antigen distribution, 1/cell. <:Real for uniform, <:Distribution for distribution, e.g. LogNormal(...).
-                          TAA_dist      = 144_866, # TAA antigen distribution, 1/cell. <:Real for uniform, <:Distribution for distribution, e.g. LogNormal(...).
+                          MW            = 54_100,  # TCE molecular weight, g/mol.
+                          # TCR antigen distribution, 1/cell. <:Real for uniform, <:Distribution for distribution, e.g. LogNormal(...).
+                          TCR_dist = let CD3_mean = 66_299, CD3_geomean = 60_053
+                              LogNormal(log(CD3_geomean),  sqrt(2 * (log(CD3_mean)  - log(CD3_geomean))))
+                          end,
+                          # TAA antigen distribution, 1/cell. <:Real for uniform, <:Distribution for distribution, e.g. LogNormal(...).
+                          TAA_dist = let CD19_geomean = 130_670, CD19_mean = 144_866
+                              LogNormal(log(CD19_geomean), sqrt(2 * (log(CD19_mean) - log(CD19_geomean))))
+                          end,
                           tau_synapse   = 150,     # Synapse duration (in vitro model), mins.
                           KD_TCR        = 2.6e-7,  # TCR binding affinity, M. 
                           KD_TAA        = 1.49e-9, # TAA binding affinity, M.
@@ -515,4 +556,96 @@ function run_liu_ABM!(; t_end = 60, showprogress = true, kwargs...)
     display(fig)
     
     return model, agent_df, model_df, fig
+end
+
+function reproduce_liu_fig3()
+    liufig3b_data = [0.6487015067924768  1.2831858407079646; 4.887775298393741   2.256637168141593; 19.434038570303596  4.601769911504424; 49.42251490751028   11.283185840707967; 98.54287131604329   12.52212389380531; 196.6991032270088   12.52212389380531; 392.8574323347438   11.858407079646017; 997.1542887677606   0.7079646017699125; 1990.1620644143597  0.8407079646017688]
+
+    mdata = [
+        count_free_effectors,  count_free_targets,  count_conjugates,
+        count_bound_effectors, count_bound_targets,
+        count_all_effectors,   count_all_targets,   count_all_conjugates,
+        target_percent_engaged, effector_percent_engaged,
+    ]
+
+    TCE_concs = vcat(liufig3b_data[:,1], 1e4)
+    t_end = 60 # Minutes
+    
+    println("Running model...")
+    progress_meter = Progress(length(TCE_concs))
+    results = ThreadsX.map(
+        # For each concentration
+        TCE_conc -> begin
+            # Run model for 1 hour
+            model = initialise_model(; TCE_conc)
+            time = 0:model.dt:t_end
+            nsteps = Int(t_end / model.dt)
+            agent_df, model_df = run!(model, nsteps; mdata, showprogress = false);
+            next!(progress_meter)
+            (agent_df, model_df)
+        end, TCE_concs)
+    finish!(progress_meter)
+
+    println("Done.")
+    println("Plotting...")
+
+    pIS_values_E = [model_df[end, :effector_percent_engaged] for (_, model_df) in results]
+    pIS_values_T = [model_df[end, :target_percent_engaged] for (_, model_df) in results]
+    
+    default(fontfamily = "Computer Modern", linewidth = 2, framestyle = :box, grid = false)
+    fig = plot(xlabel = "[Blinatumomab] (ng/ml)", ylabel = "Effector % engaged",
+               xscale = :log10, legend = :topleft)
+
+    plot!(fig, TCE_concs, pIS_values, label = "Sim.", c = 1)
+    scatter!(fig, liufig3b_data[:,1], liufig3b_data[:,2], label = "Obs.", c = 1)
+
+    display(fig)
+
+    println("Done.")
+    return results, pIS_values, fig
+end
+
+
+function reproduce_liu_fig5(; t_end = 72 * 60, dt = 1)
+    mdata = [
+        count_free_effectors,  count_free_targets,  count_conjugates,
+        count_bound_effectors, count_bound_targets,
+        count_all_effectors,   count_all_targets,   count_all_conjugates,
+        target_percent_engaged, effector_percent_engaged,
+    ]
+
+    TCE_concs = [0.65, 5.0, 20.0, 100.0]
+
+    # Initial cell populations
+    n_effector_0 = 1e6
+    n_target_0   = 1e6
+    
+    println("Running model...")
+    progress_meter = Progress(length(TCE_concs))
+    results = ThreadsX.map(
+        # For each concentration
+        TCE_conc -> begin
+            # Run model for 1 hour
+            model = initialise_model(; TCE_conc, n_effector_0, n_target_0, dt)
+            time = 0:dt:t_end
+            nsteps = Int(t_end / model.dt)
+            agent_df, model_df = run!(model, nsteps; mdata, showprogress = false);
+            next!(progress_meter)
+            (agent_df, model_df)
+        end, TCE_concs)
+    finish!(progress_meter)
+
+    times = [model_df[:, :time] for (_,model_df) in results] .* dt ./60
+    target_cell_depletions = [(1 .- model_df[:, :count_free_targets] ./ n_target_0) .* 100
+                              for (_,model_df) in results]
+    println("Done.")
+    println("Plotting...")
+    default(fontfamily = "Computer Modern", linewidth = 2, framestyle = :box, grid = false)
+    fig = plot(xlabel = "Time (hours)", ylabel = "Target cell depletion (%)", legend = :topleft)
+    for (i, target_cell_depletion_series) in enumerate(target_cell_depletions)
+        plot!(fig, times, target_cell_depletion_series; label = "$(TCE_concs[i]) ng/ml")
+    end
+    display(fig)
+    println("Done.")
+    return (results, target_cell_depletions)
 end
