@@ -1,7 +1,7 @@
 # Optimised implementation of Liu et al. 2023 T-cell engagers ABM
 9x 1 hour simulations in `reproduce_liu_figure_3` at 2x10^6 cells takes about 60 seconds. Further optimisation may be achieved by using the analytical solution for the binding equations.
 
-<img width="600" height="400" alt="image" src="https://github.com/user-attachments/assets/c572d0d4-ff27-4a37-a80e-727ba6dc4951" />
+<img width="300" height="200" alt="image" src="https://github.com/user-attachments/assets/c572d0d4-ff27-4a37-a80e-727ba6dc4951" />
 
 ## Usage
 ### 1. Clone repository
