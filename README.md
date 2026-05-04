@@ -3,6 +3,32 @@
 
 <img width="600" height="400" alt="image" src="https://github.com/user-attachments/assets/c572d0d4-ff27-4a37-a80e-727ba6dc4951" />
 
+## Usage
+### 1. Clone repository
+In a terminal, run:
+```
+$ git clone https://github.com/aakllee/TCEs_synapse_ABM.git
+```
+
+### 2. Install Julia
+See https://julialang.org.
+
+### 3. Install dependencies
+Open Julia. Enter the package management system (e.g. by typing `]`). Optionally, activate a new project (`pkg> activate .`). Install dependencies:
+```
+pkg> add Agents, DifferentialEquations, Distributions, Match, PhysicalConstants, Plots, ProgressMeter. Statistics, ThreadsX 
+```
+
+### 4. Load files
+```
+julia> include("reproduce_liu_figs.jl")
+```
+
+### 5. Run code
+```
+julia> reproduce_liu_fig3()
+```
+
 ## Authors
 **Aaron K. Lee** - Early Oncology DMPK, AstraZeneca, Cambridge, UK
 
