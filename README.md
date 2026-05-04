@@ -16,7 +16,7 @@ See https://julialang.org.
 ### 3. Install dependencies
 Open Julia. Enter the package management system (e.g. by typing `]`). Optionally, activate a new project (`pkg> activate .`). Install dependencies:
 ```
-pkg> add Agents, DifferentialEquations, Distributions, Match, PhysicalConstants, Plots, ProgressMeter. Statistics, ThreadsX 
+pkg> add Agents, DifferentialEquations, Distributions, Match, PhysicalConstants, Plots, ProgressMeter, Statistics, ThreadsX 
 ```
 
 ### 4. Load files
@@ -24,7 +24,7 @@ pkg> add Agents, DifferentialEquations, Distributions, Match, PhysicalConstants,
 julia> include("reproduce_liu_figs.jl")
 ```
 
-### 5. Run code
+### 5. Run
 ```
 julia> reproduce_liu_fig3()
 ```
