@@ -13,18 +13,24 @@ $ git clone https://github.com/aakllee/TCEs_synapse_ABM.git
 ### 2. Install Julia
 See https://julialang.org.
 
-### 3. Install dependencies
-Open Julia. Enter the package management system (e.g. by typing `]`). Optionally, activate a new project (`pkg> activate .`). Install dependencies:
+### 3. Open Julia
+For multithreading, specify the number of threads: 
+```
+$ julia --threads 12
+```
+
+### 4. Install dependencies
+Enter the package management system (e.g. by typing `]`). Optionally, activate a new project (`pkg> activate .`). Install dependencies:
 ```
 pkg> add Agents, DifferentialEquations, Distributions, Match, PhysicalConstants, Plots, ProgressMeter, Statistics, ThreadsX 
 ```
 
-### 4. Load files
+### 5. Load files
 ```
 julia> include("reproduce_liu_figs.jl")
 ```
 
-### 5. Run
+### 6. Run
 ```
 julia> reproduce_liu_fig3()
 ```
