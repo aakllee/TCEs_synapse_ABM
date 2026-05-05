@@ -1,11 +1,15 @@
 # Optimised implementation of Liu et al. 2023 T-cell engagers ABM
 9x 1 hour simulations in `reproduce_liu_figure_3` at 2x10^6 cells takes about 60 seconds. Further optimisation may be achieved by using the analytical solution for the binding equations.
 
+<img width="300" height="200" alt="image" src="https://github.com/user-attachments/assets/c572d0d4-ff27-4a37-a80e-727ba6dc4951" />
+
+
 Also included is a reduction of the ABM to ODEs (https://github.com/aakllee/TCEs_synapse_ABM/blob/main/reduction.jl). This is similar to the Liao et al. 2024 model, but more accurately fits the data-points showing the hook effect omitted from the Liao et al. 2024 paper. It more precisely reflects the original ABM, including multiple conjugate formation, and using the original Liu et al. 2023 parameters (currently only `beta` differs, set to 0.028 from Liu et al. 2023's 0.033).
 
 Note `BS3()` is used as our ODEs solver, but this can be trivially changed for greater numerical accuracy if required. 
 
-<img width="300" height="200" alt="image" src="https://github.com/user-attachments/assets/c572d0d4-ff27-4a37-a80e-727ba6dc4951" />
+<img width="300" height="200" alt="liu_ODEs_fig" src="https://github.com/user-attachments/assets/3490f9ec-97ab-4d73-b21c-d670c87ac37d" />
+
 
 ## Usage
 ### 1. Clone repository
