@@ -195,7 +195,7 @@ function reduced_liu_model!(du, u, p, t)
 
     du[idx_n_effector_free()] = d_effector_free
     du[idx_n_target_free()]   = d_target_free
-    du[idx_n_conjugates()] .= reshape(d_conjugates, 9)
+    du[idx_n_conjugates()] .= reshape(d_conjugates', 9)
     return nothing
 end
 
