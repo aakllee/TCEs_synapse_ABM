@@ -43,4 +43,6 @@ julia> reproduce_liu_fig3()
 **Aaron K. Lee** - Early Oncology DMPK, AstraZeneca, Cambridge, UK
 
 ## References
-Original paper and model: Can Liu, Jiawei Zhou, Stephan Kudlacek, Timothy Qi, Tyler Dunlap, Yanguang Cao (2023) Population dynamics of immunological synapse formation induced by bispecific T cell engagers predict clinical pharmacodynamics and treatment resistance eLife 12:e83659
+Original paper and model: Liu, C., Zhou, J., Kudlacek, S., Qi, T., Dunlap, T., & Cao, Y. (2023). Population dynamics of immunological synapse formation induced by bispecific T cell engagers predict clinical pharmacodynamics and treatment resistance. eLife, 12. https://doi.org/10.7554/elife.83659
+
+Liao, X., Qi, T., Zhou, J., Liu, C., & Cao, Y. (2024). Optimizing Clinical Translation of Bispecific T‐cell Engagers through Context Unification with a Quantitative Systems Pharmacology Model. Clinical Pharmacology &amp; Therapeutics, 116(2), 415–425. https://doi.org/10.1002/cpt.3302
