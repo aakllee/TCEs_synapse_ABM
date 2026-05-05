@@ -34,8 +34,13 @@ pkg> add Agents, DifferentialEquations, Distributions, Match, PhysicalConstants,
 ```
 
 ### 5. Load files
+For the ABM model:
 ```
 julia> include("reproduce_liu_figs.jl")
+```
+Or for the ODEs model:
+```
+julia> include("reduction.jl")
 ```
 
 ### 6. Run
