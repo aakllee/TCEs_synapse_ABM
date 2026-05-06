@@ -8,7 +8,9 @@ Also included is a reduction of the ABM to ODEs (https://github.com/aakllee/TCEs
 
 Note `BS3()` is used as our ODEs solver, but this can be trivially changed for greater numerical accuracy if required. 
 
-<img width="300" height="200" alt="liu_ODEs_fig" src="https://github.com/user-attachments/assets/3490f9ec-97ab-4d73-b21c-d670c87ac37d" />
+<!-- <img width="300" height="200" alt="liu_ODEs_fig" src="https://github.com/user-attachments/assets/3490f9ec-97ab-4d73-b21c-d670c87ac37d" /> -->
+<img width="300" height="300" alt="image" src="https://github.com/user-attachments/assets/7277f85a-1884-404e-b70f-e99f002d224e" />
+
 
 
 ## Usage
@@ -40,7 +42,7 @@ julia> include("reproduce_liu_figs.jl")
 ```
 Or for the ODEs model:
 ```
-julia> include("reduction.jl")
+julia> include("reduction_reproduce_liu_figs.jl")
 ```
 
 ### 6. Run
